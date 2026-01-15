@@ -1,12 +1,13 @@
-#!/usr/bin/env zsh
+#!/bin/sh
 
 # Bootstrap script for Worktree Scripts
 # This script installs the worktree management tools
+# Compatible with POSIX sh for easy installation via curl
 
 set -e
 
 # Color codes for output
-if [[ -t 1 ]]; then
+if [ -t 1 ]; then
   RED='\033[0;31m'
   GREEN='\033[0;32m'
   YELLOW='\033[0;33m'
@@ -47,14 +48,14 @@ main() {
   echo
 
   # Check if already installed
-  if [[ -d "$INSTALL_DIR" ]]; then
+  if [ -d "$INSTALL_DIR" ]; then
     error "Installation directory $INSTALL_DIR already exists.\nPlease remove it first or use a different location."
   fi
 
   # Get repository URL (use default if not provided)
-  local repo_url="${1:-$DEFAULT_REPO_URL}"
+  repo_url="${1:-$DEFAULT_REPO_URL}"
 
-  if [[ "$repo_url" == "$DEFAULT_REPO_URL" ]]; then
+  if [ "$repo_url" = "$DEFAULT_REPO_URL" ]; then
     info "Using default repository: $repo_url"
   fi
 
@@ -74,8 +75,8 @@ main() {
   chmod +x "$INSTALL_DIR/bootstrap.sh"
 
   # Check if .zshrc exists
-  if [[ ! -f "$ZSHRC" ]]; then
-    warn "~/.zshrc does not exist. Creating it..."
+  if [ ! -f "$ZSHRC" ]; then
+    info "~/.zshrc does not exist. Creating it..."
     touch "$ZSHRC"
   fi
 
