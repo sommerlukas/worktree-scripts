@@ -330,13 +330,27 @@ cmd_create() {
   # Check if branch exists and create worktree
   cd "$main_src" || error "Cannot access main worktree"
 
+  # Fetch latest refs from remote to ensure we have up-to-date branch information
+  echo "Fetching from remote..."
+  git fetch origin --quiet 2>/dev/null || warn "Failed to fetch from remote, continuing anyway..."
+
   echo "Creating worktree '$worktree_name'..."
+
+  # Check if branch exists locally
   if git show-ref --verify --quiet "refs/heads/$worktree_name"; then
-    echo "Branch '$worktree_name' exists, checking it out..."
+    echo "Local branch '$worktree_name' exists, checking it out..."
     if ! git worktree add "$worktree_path/src" "$worktree_name"; then
       rmdir "$worktree_path" 2>/dev/null
       error "Failed to create worktree"
     fi
+  # Check if branch exists on remote origin
+  elif git show-ref --verify --quiet "refs/remotes/origin/$worktree_name"; then
+    echo "Remote branch 'origin/$worktree_name' exists, checking it out..."
+    if ! git worktree add "$worktree_path/src" "$worktree_name" "origin/$worktree_name"; then
+      rmdir "$worktree_path" 2>/dev/null
+      error "Failed to create worktree"
+    fi
+  # Branch doesn't exist anywhere, create new from main
   else
     echo "Creating new branch '$worktree_name' from '$main_branch'..."
     if ! git worktree add -b "$worktree_name" "$worktree_path/src" "$main_branch"; then

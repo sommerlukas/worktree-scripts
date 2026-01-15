@@ -122,12 +122,16 @@ wt create feature-branch
 ```
 
 This will:
+- Fetch latest refs from remote origin
 - Create a new directory: `myapp/feature-branch/`
 - Create a git worktree in `feature-branch/src/`
 - Create `build/` and `local/` directories
 - Run the `create_hook` if available
 
-If the branch `feature-branch` doesn't exist, it will be created from the main branch (`main` or `master`). If it exists, it will be checked out.
+**Branch selection priority:**
+1. If `feature-branch` exists locally, it will be checked out
+2. If `feature-branch` exists on remote origin, it will be checked out from origin
+3. If the branch doesn't exist anywhere, it will be created from the main branch (`main` or `master`)
 
 ### List Worktrees
 
