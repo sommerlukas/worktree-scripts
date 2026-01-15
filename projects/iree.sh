@@ -50,15 +50,16 @@ remove_hook() {
 setup_hook() {
   echo "IREE: Running setup hook"
   
-  local src_dir = ${PWD}
-  local root_dir = ${PWD:A:h}
-  local tree_name = ${PWD:h:h:t}
-  local build_dir = "$root_dir/build"
+  local src_dir=${PWD}
+  local root_dir=${PWD:A:h}
+  local tree_name=${PWD:h:h:t}
+  local build_dir="$root_dir/build"
 
-  python3 -m venv "$src_dir/venv" --prompt "$tree_name"
-  source $src_dir/venv/bin/activate
+  python3 -m venv "$root_dir/venv" --prompt "$tree_name"
+  source $root_dir/venv/bin/activate
   pip install -r "$src_dir/runtime/bindings/python/iree/runtime/build_requirements.txt"
 
+  pushd $root_dir
   echo "export CCACHE_BASEDIR=\"$root_dir\"" > .envrc
   echo "export CCACHE_NOHASHDIR=1" >> .envrc
   echo "export CCACHE_SLOPPINESS=include_file_mtime,include_file_ctime" >> .envrc
@@ -66,7 +67,11 @@ setup_hook() {
   echo "source \"$build_dir/.env\" && export PYTHONPATH" >> .envrc
   echo "PATH_add \"$build_dir/tools\"" >> .envrc
 
+  direnv allow "$root_dir"
+
   eval "$(direnv export zsh)"
+
+  popd
 
   cmake -G Ninja -B $build_dir -S $src_dir \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
@@ -85,8 +90,6 @@ setup_hook() {
 
   ln -sf "$build_dir/compile_commands.json" "$src_dir/compile_commands.json"
   ln -sf "$build_dir/tablegen_compile_commands.yaml" "$src_dir/tablegen_compile_commands.yaml"
-
-  direnv allow "$root_dir"
 
   echo "Finished IREE setup hook"
 }
