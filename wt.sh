@@ -346,7 +346,7 @@ cmd_create() {
   # Check if branch exists on remote origin
   elif git show-ref --verify --quiet "refs/remotes/origin/$worktree_name"; then
     echo "Remote branch 'origin/$worktree_name' exists, checking it out..."
-    if ! git worktree add "$worktree_path/src" "$worktree_name" "origin/$worktree_name"; then
+    if ! git worktree add --track -b "$worktree_name" "$worktree_path/src" "origin/$worktree_name"; then
       rmdir "$worktree_path" 2>/dev/null
       error "Failed to create worktree"
     fi
