@@ -82,10 +82,11 @@ find_project_root() {
   local current_dir
   current_dir=$(realpath "$PWD")
 
+  local resolved_project_path
+
   # Read projects file and check if current directory is within any project
   while IFS=: read -r project_path project_name; do
     # Resolve the project path in case it contains symlinks
-    local resolved_project_path
     resolved_project_path=$(realpath "$project_path" 2>/dev/null || echo "$project_path")
 
     # Check if current directory starts with project path
