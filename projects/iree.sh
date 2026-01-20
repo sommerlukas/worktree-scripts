@@ -92,7 +92,7 @@ setup_hook() {
     -DIREE_BUILD_PYTHON_BINDINGS=ON
 
   ln -sf "$build_dir/compile_commands.json" "$src_dir/compile_commands.json"
-  ln -sf "$build_dir/tablegen_compile_commands.yaml" "$src_dir/tablegen_compile_commands.yaml"
+  ln -sf "$build_dir/tablegen_compile_commands.yaml" "$root_dir/tablegen_compile_commands.yaml"
 
   echo "Finished IREE setup hook"
 }
