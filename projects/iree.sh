@@ -1,12 +1,13 @@
 #!/usr/bin/env zsh
 
-# Project hooks for IREE. 
+# Project hooks for IREE.
 #
 # Hook functions are called at specific points in the worktree lifecycle:
 # - init_hook: Called after 'wt init' in the main/src directory
 # - create_hook: Called after 'wt create' in the new worktree's src directory
 # - remove_hook: Called before 'wt remove' in the worktree's src directory
 # - setup_hook: Called by 'wt setup' in the worktree's src directory
+# - rebase_hook: Called after 'wt rebase' (only on success) in the worktree's src directory
 
 # Called after initializing a new project
 # Working directory: <project-root>/main/src
@@ -95,4 +96,14 @@ setup_hook() {
   ln -sf "$build_dir/tablegen_compile_commands.yaml" "$root_dir/tablegen_compile_commands.yaml"
 
   echo "Finished IREE setup hook"
+}
+
+# Called after successfully rebasing a worktree
+# Working directory: <project-root>/<worktree-name>/src
+rebase_hook() {
+  echo "IREE: Running rebase hook"
+
+  git submodule update
+
+  echo "Finished IREE rebase hook"
 }

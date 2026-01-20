@@ -154,6 +154,30 @@ This is useful for:
 - Rebuilding the project
 - Updating configurations
 
+### Rebase a Worktree
+
+Rebase a worktree on top of the latest `origin/main`:
+
+```bash
+wt rebase feature-branch
+```
+
+This will:
+- Fetch the latest changes from `origin` (without updating the main worktree)
+- Rebase the specified worktree on top of `origin/main`
+- Leave the worktree in conflict state if conflicts occur (for manual resolution)
+
+**Note**: You cannot rebase the `main` worktree.
+
+If the rebase encounters conflicts, you'll need to resolve them manually:
+```bash
+cd feature-branch/src
+# Resolve conflicts, then:
+git rebase --continue
+# Or abort the rebase:
+git rebase --abort
+```
+
 ### Remove a Worktree
 
 Delete a worktree (requires confirmation):
@@ -221,6 +245,12 @@ setup_hook() {
   rm -rf node_modules
   npm install
 }
+
+# Called after 'wt rebase' (only on success) in the worktree's src
+rebase_hook() {
+  echo "Updating dependencies after rebase..."
+  npm install
+}
 ```
 
 ### Available Hooks
@@ -231,6 +261,7 @@ setup_hook() {
 | `create_hook` | After `wt create` | `<project>/<worktree>/src` |
 | `remove_hook` | Before `wt remove` | `<project>/<worktree>/src` |
 | `setup_hook` | During `wt setup` | `<project>/<worktree>/src` |
+| `rebase_hook` | After `wt rebase` (only on success) | `<project>/<worktree>/src` |
 
 See `projects/example-project.sh` for more hook examples.
 
@@ -245,6 +276,7 @@ See `projects/example-project.sh` for more hook examples.
 | `wt create` | Create a new worktree | `<worktree-name>` |
 | `wt remove` | Remove a worktree | `<worktree-name>` |
 | `wt setup` | Run setup hooks for a worktree | `<worktree-name>` |
+| `wt rebase` | Rebase a worktree on origin/main | `<worktree-name>` |
 | `wt help` | Show help message | None |
 
 ## Configuration
@@ -287,6 +319,9 @@ wt create hotfix/bug-123
 
 # List all worktrees
 wt list
+
+# Rebase a feature branch on latest main
+wt rebase feature-new-ui
 
 # Remove completed feature
 wt remove feature-new-ui

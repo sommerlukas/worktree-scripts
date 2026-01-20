@@ -11,6 +11,7 @@
 # - create_hook: Called after 'wt create' in the new worktree's src directory
 # - remove_hook: Called before 'wt remove' in the worktree's src directory
 # - setup_hook: Called by 'wt setup' in the worktree's src directory
+# - rebase_hook: Called after 'wt rebase' (only on success) in the worktree's src directory
 
 # Called after initializing a new project
 # Working directory: <project-root>/main/src
@@ -131,6 +132,36 @@ setup_hook() {
   #   echo "Cleaning build directory..."
   #   rm -rf ../build/*
   #   echo "Rebuilding..."
+  #   make build
+  # fi
+}
+
+# Called after successfully rebasing a worktree
+# Working directory: <project-root>/<worktree-name>/src
+rebase_hook() {
+  echo "Example: Running rebase hook"
+
+  # Common rebase tasks:
+  # - Update submodules
+  # - Reinstall dependencies if package files changed
+  # - Rebuild if necessary
+  # - Update database migrations
+
+  # Example: Update git submodules
+  # if [[ -f ".gitmodules" ]]; then
+  #   echo "Updating submodules..."
+  #   git submodule update
+  # fi
+
+  # Example for Node.js: Reinstall if package.json changed
+  # if git diff HEAD@{1} HEAD --name-only | grep -q "package.json"; then
+  #   echo "package.json changed, reinstalling dependencies..."
+  #   npm install
+  # fi
+
+  # Example: Rebuild project
+  # if [[ -d "../build" ]]; then
+  #   echo "Rebuilding after rebase..."
   #   make build
   # fi
 }

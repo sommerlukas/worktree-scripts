@@ -460,6 +460,63 @@ cmd_setup() {
   success "Setup complete for worktree '$worktree_name'!"
 }
 
+# Rebase a worktree on origin/main
+cmd_rebase() {
+  if [[ $# -ne 1 ]]; then
+    error "Usage: wt rebase <worktree-name>" 2
+  fi
+
+  local worktree_name="$1"
+
+  # Find project root
+  local result
+  result=$(find_project_root)
+  local project_path
+  local project_name
+  project_path=$(echo "$result" | sed -n '1p')
+  project_name=$(echo "$result" | sed -n '2p')
+
+  local main_src="$project_path/main/src"
+
+  # Get main branch name
+  local main_branch
+  main_branch=$(get_main_branch "$main_src")
+
+  # Cannot rebase main
+  if [[ "$worktree_name" == "main" ]]; then
+    error "Cannot rebase the 'main' worktree (tracking branch: $main_branch)"
+  fi
+
+  # Validate worktree exists
+  if ! is_valid_worktree "$project_path" "$worktree_name"; then
+    error "Worktree '$worktree_name' does not exist or is not valid"
+  fi
+
+  local worktree_path="$project_path/$worktree_name"
+
+  # Fetch from origin (without updating main worktree)
+  echo "Fetching from origin..."
+  cd "$main_src" || error "Cannot access main worktree"
+  git fetch origin --quiet 2>/dev/null || warn "Failed to fetch from remote, continuing anyway..."
+
+  # Rebase the worktree
+  cd "$worktree_path/src" || error "Cannot access worktree src directory"
+
+  echo "Rebasing '$worktree_name' on 'origin/$main_branch'..."
+  if git rebase "origin/$main_branch"; then
+    # Run rebase hook
+    run_hook "$project_name" "rebase"
+
+    success "Worktree '$worktree_name' successfully rebased on 'origin/$main_branch'!"
+  else
+    warn "Rebase encountered conflicts. Resolve them manually, then run:"
+    warn "  git rebase --continue"
+    warn "Or abort with:"
+    warn "  git rebase --abort"
+    exit 1
+  fi
+}
+
 # Show usage information
 cmd_help() {
   cat << EOF
@@ -475,6 +532,7 @@ Commands:
   create <worktree-name>       Create a new worktree
   remove <worktree-name>       Remove a worktree
   setup <worktree-name>        Run setup hooks for a worktree
+  rebase <worktree-name>       Rebase a worktree on origin/main
   help                         Show this help message
 
 For more information, see the README.
@@ -521,6 +579,9 @@ main() {
       ;;
     setup)
       cmd_setup "$@"
+      ;;
+    rebase)
+      cmd_rebase "$@"
       ;;
     help|--help|-h)
       cmd_help
