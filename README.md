@@ -193,6 +193,53 @@ This will:
 
 **Note**: You cannot remove the `main` worktree.
 
+### Sweep Stale Worktrees
+
+Identify and remove stale worktrees that are no longer needed:
+
+```bash
+wt sweep
+```
+
+This command finds worktrees that are no longer needed and asks for confirmation before removing each one.
+
+A worktree is considered stale if:
+1. **Merged PR**: The branch was pushed to remote, but the remote branch was deleted (typically after a PR was merged)
+2. **Inactive local branch**: The branch is local-only (never pushed) and hasn't been modified in 4 weeks
+
+The sweep command will:
+- Fetch the latest refs from the remote
+- Scan all worktrees in the current project
+- Display all stale worktrees with reasons
+- Ask for individual confirmation before removing each worktree
+- Run the `remove_hook` for each removed worktree
+- Show a summary of actions taken
+
+**Example output:**
+```
+Fetching latest refs from remote...
+
+Found 2 stale worktree(s):
+  feature-old-ui: Remote branch deleted (likely merged PR)
+  experiment-123: Local-only, inactive for 8 weeks
+
+Remove worktree 'feature-old-ui'?
+  Reason: Remote branch deleted (likely merged PR)
+  (y/N): y
+  Removing git worktree...
+  Deleting worktree directory...
+  Removed 'feature-old-ui'
+
+Remove worktree 'experiment-123'?
+  Reason: Local-only, inactive for 8 weeks
+  (y/N): n
+  Skipped.
+
+Sweep complete: 1 removed, 1 skipped
+```
+
+**Note**: This command only operates on worktrees in the current project.
+
 ### Delete a Project
 
 Delete the entire project (requires confirmation):
@@ -277,6 +324,7 @@ See `projects/example-project.sh` for more hook examples.
 | `wt remove` | Remove a worktree | `<worktree-name>` |
 | `wt setup` | Run setup hooks for a worktree | `<worktree-name>` |
 | `wt rebase` | Rebase a worktree on origin/main | `<worktree-name>` |
+| `wt sweep` | Remove stale worktrees | None |
 | `wt help` | Show help message | None |
 
 ## Configuration

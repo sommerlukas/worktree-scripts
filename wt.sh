@@ -372,6 +372,41 @@ cmd_create() {
   echo "Worktree location: $worktree_path"
 }
 
+# Internal function to remove a worktree (no confirmation)
+# Args: project_path, project_name, worktree_name
+# Returns: 0 on success, 1 on failure
+remove_worktree_impl() {
+  local project_path="$1"
+  local project_name="$2"
+  local worktree_name="$3"
+  local worktree_path="$project_path/$worktree_name"
+
+  # Run remove hook
+  if [[ -d "$worktree_path/src" ]]; then
+    cd "$worktree_path/src" || warn "Cannot access worktree src directory for hook"
+    run_hook "$project_name" "remove"
+  fi
+
+  # Remove git worktree
+  local main_src="$project_path/main/src"
+  cd "$main_src" || return 1
+
+  echo "Removing git worktree..."
+  if ! git worktree remove "$worktree_path/src" 2>/dev/null; then
+    warn "Failed to remove git worktree, trying with --force"
+    git worktree remove --force "$worktree_path/src" 2>/dev/null || {
+      warn "Failed to remove git worktree"
+      return 1
+    }
+  fi
+
+  # Delete worktree directory
+  echo "Deleting worktree directory..."
+  rm -rf "$worktree_path"
+
+  return 0
+}
+
 # Remove a worktree
 cmd_remove() {
   if [[ $# -ne 1 ]]; then
@@ -409,25 +444,12 @@ cmd_remove() {
     exit 4
   fi
 
-  # Run remove hook
-  cd "$worktree_path/src" || warn "Cannot access worktree src directory for hook"
-  run_hook "$project_name" "remove"
-
-  # Remove git worktree
-  local main_src="$project_path/main/src"
-  cd "$main_src" || error "Cannot access main worktree"
-
-  echo "Removing git worktree..."
-  if ! git worktree remove "$worktree_path/src"; then
-    warn "Failed to remove git worktree, trying with --force"
-    git worktree remove --force "$worktree_path/src" || error "Failed to remove git worktree"
+  # Call helper function
+  if remove_worktree_impl "$project_path" "$project_name" "$worktree_name"; then
+    success "Worktree '$worktree_name' removed successfully!"
+  else
+    error "Failed to remove worktree '$worktree_name'"
   fi
-
-  # Delete worktree directory
-  echo "Deleting worktree directory..."
-  rm -rf "$worktree_path"
-
-  success "Worktree '$worktree_name' removed successfully!"
 }
 
 # Setup a worktree
@@ -517,6 +539,139 @@ cmd_rebase() {
   fi
 }
 
+# Sweep and remove stale worktrees
+cmd_sweep() {
+  if [[ $# -ne 0 ]]; then
+    error "Usage: wt sweep" 2
+  fi
+
+  # Find project root
+  local result
+  result=$(find_project_root)
+  local project_path
+  local project_name
+  project_path=$(echo "$result" | sed -n '1p')
+  project_name=$(echo "$result" | sed -n '2p')
+
+  local main_src="$project_path/main/src"
+  if [[ ! -d "$main_src" ]]; then
+    error "Main worktree not found at $main_src"
+  fi
+
+  cd "$main_src" || error "Cannot access main worktree"
+
+  # Fetch latest refs to ensure accurate remote branch checking
+  echo "Fetching latest refs from remote..."
+  git fetch origin --quiet 2>/dev/null || warn "Failed to fetch from remote, continuing anyway..."
+
+  # Collect stale worktrees
+  local -a stale_worktrees
+  local -A stale_reasons
+
+  # Parse worktree list
+  local current_worktree=""
+  local current_branch=""
+
+  while IFS= read -r line; do
+    if [[ "$line" =~ ^worktree\ (.+)$ ]]; then
+      current_worktree="${match[1]}"
+    elif [[ "$line" =~ ^branch\ refs/heads/(.+)$ ]]; then
+      current_branch="${match[1]}"
+
+      # Extract worktree name from path
+      local worktree_name=$(basename "$(dirname "$current_worktree")")
+      local worktree_path="$project_path/$worktree_name"
+
+      # Skip main
+      if [[ "$worktree_name" == "main" ]]; then
+        continue
+      fi
+
+      local stale=false
+      local reason=""
+
+      # Check criterion 1: Remote branch deleted
+      local upstream
+      upstream=$(git -C "$current_worktree" rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null || echo "")
+
+      if [[ -n "$upstream" ]]; then
+        # Has upstream, check if remote branch still exists
+        if ! git show-ref --verify --quiet "refs/remotes/origin/$current_branch"; then
+          stale=true
+          reason="Remote branch deleted (likely merged PR)"
+        fi
+      else
+        # Check criterion 2: Local-only and inactive for 4 weeks
+        local last_modified
+        last_modified=$(find "$worktree_path" -type f -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
+
+        if [[ -n "$last_modified" ]]; then
+          local current_time=$(date +%s)
+          # Convert to integer (remove decimal part)
+          last_modified=${last_modified%.*}
+          local age=$((current_time - last_modified))
+          local four_weeks=2419200
+
+          if [[ $age -gt $four_weeks ]]; then
+            stale=true
+            local weeks=$((age / 604800))
+            reason="Local-only, inactive for $weeks weeks"
+          fi
+        fi
+      fi
+
+      if [[ "$stale" == "true" ]]; then
+        stale_worktrees+=("$worktree_name")
+        stale_reasons[$worktree_name]="$reason"
+      fi
+    fi
+  done < <(git worktree list --porcelain)
+
+  # Check if any stale worktrees found
+  if [[ ${#stale_worktrees[@]} -eq 0 ]]; then
+    echo "No stale worktrees found."
+    return 0
+  fi
+
+  # Display found stale worktrees
+  echo ""
+  echo "Found ${#stale_worktrees[@]} stale worktree(s):"
+  for worktree in "${stale_worktrees[@]}"; do
+    echo "  ${YELLOW}$worktree${NC}: ${stale_reasons[$worktree]}"
+  done
+  echo ""
+
+  # Ask for confirmation for each worktree
+  local removed_count=0
+  local skipped_count=0
+
+  for worktree_name in "${stale_worktrees[@]}"; do
+    echo "Remove worktree '${YELLOW}$worktree_name${NC}'?"
+    echo "  Reason: ${stale_reasons[$worktree_name]}"
+    echo -n "  (y/N): "
+    read -r response
+
+    if [[ "$response" == "y" || "$response" == "Y" ]]; then
+      # Call helper function
+      if remove_worktree_impl "$project_path" "$project_name" "$worktree_name"; then
+        success "  Removed '$worktree_name'"
+        ((removed_count++))
+      else
+        warn "  Failed to remove '$worktree_name'"
+        ((skipped_count++))
+      fi
+    else
+      echo "  Skipped."
+      ((skipped_count++))
+    fi
+    echo ""
+  done
+
+  # Summary
+  echo ""
+  success "Sweep complete: $removed_count removed, $skipped_count skipped"
+}
+
 # Show usage information
 cmd_help() {
   cat << EOF
@@ -533,6 +688,7 @@ Commands:
   remove <worktree-name>       Remove a worktree
   setup <worktree-name>        Run setup hooks for a worktree
   rebase <worktree-name>       Rebase a worktree on origin/main
+  sweep                        Remove stale worktrees (merged or inactive)
   help                         Show this help message
 
 For more information, see the README.
@@ -582,6 +738,9 @@ main() {
       ;;
     rebase)
       cmd_rebase "$@"
+      ;;
+    sweep)
+      cmd_sweep "$@"
       ;;
     help|--help|-h)
       cmd_help
