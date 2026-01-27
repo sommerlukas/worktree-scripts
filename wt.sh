@@ -562,7 +562,7 @@ cmd_sweep() {
 
   # Fetch latest refs to ensure accurate remote branch checking
   echo "Fetching latest refs from remote..."
-  git fetch origin --quiet 2>/dev/null || warn "Failed to fetch from remote, continuing anyway..."
+  git fetch origin --prune --quiet 2>/dev/null || warn "Failed to fetch from remote, continuing anyway..."
 
   # Collect stale worktrees
   local -a stale_worktrees
