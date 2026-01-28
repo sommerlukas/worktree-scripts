@@ -27,7 +27,9 @@ create_hook() {
   local parent2=${PWD:A:h:h}
   local MAIN_IREE="$parent2/main/src"
 
-  for submodule in $(git config get --file=.gitmodules --all --regexp path); do
+  git config --file=.gitmodules --get-regexp path |
+  awk '{print $2}' |
+  while IFS= read -r submodule; do
     echo "Creating quasi-worktree of $submodule"
     git submodule update --reference "$MAIN_IREE/$submodule" "$submodule"
   done
