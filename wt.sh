@@ -295,11 +295,12 @@ cmd_list() {
 
 # Create a new worktree
 cmd_create() {
-  if [[ $# -ne 1 ]]; then
-    error "Usage: wt create <worktree-name>" 2
+  if [[ $# -lt 1 || $# -gt 2 ]]; then
+    error "Usage: wt create <worktree-name> [base-branch]" 2
   fi
 
   local worktree_name="$1"
+  local base_branch="${2:-}"
 
   # Find project root
   local result
@@ -321,9 +322,17 @@ cmd_create() {
     error "Main worktree not found at $main_src"
   fi
 
-  # Get main branch
-  local main_branch
-  main_branch=$(get_main_branch "$main_src")
+  # Get main branch if base branch not provided
+  if [[ -z "$base_branch" ]]; then
+    base_branch=$(get_main_branch "$main_src")
+  fi
+
+  # Verify base branch exists
+  cd "$main_src" || error "Cannot access main worktree"
+  if ! git show-ref --verify --quiet "refs/heads/$base_branch" && \
+     ! git show-ref --verify --quiet "refs/remotes/origin/$base_branch"; then
+    error "Base branch '$base_branch' does not exist locally or on remote"
+  fi
 
   # Create worktree directory
   mkdir -p "$worktree_path" || error "Failed to create worktree directory"
@@ -351,10 +360,10 @@ cmd_create() {
       rmdir "$worktree_path" 2>/dev/null
       error "Failed to create worktree"
     fi
-  # Branch doesn't exist anywhere, create new from main
+  # Branch doesn't exist anywhere, create new from base branch
   else
-    echo "Creating new branch '$worktree_name' from '$main_branch'..."
-    if ! git worktree add -b "$worktree_name" "$worktree_path/src" "$main_branch"; then
+    echo "Creating new branch '$worktree_name' from '$base_branch'..."
+    if ! git worktree add -b "$worktree_name" "$worktree_path/src" "$base_branch"; then
       rmdir "$worktree_path" 2>/dev/null
       error "Failed to create worktree"
     fi
@@ -484,11 +493,12 @@ cmd_setup() {
 
 # Rebase a worktree on origin/main
 cmd_rebase() {
-  if [[ $# -ne 1 ]]; then
-    error "Usage: wt rebase <worktree-name>" 2
+  if [[ $# -lt 1 || $# -gt 2 ]]; then
+    error "Usage: wt rebase <worktree-name> [base-branch]" 2
   fi
 
   local worktree_name="$1"
+  local base_branch="${2:-}"
 
   # Find project root
   local result
@@ -500,13 +510,14 @@ cmd_rebase() {
 
   local main_src="$project_path/main/src"
 
-  # Get main branch name
-  local main_branch
-  main_branch=$(get_main_branch "$main_src")
+  # Get main branch name if base branch not provided
+  if [[ -z "$base_branch" ]]; then
+    base_branch=$(get_main_branch "$main_src")
+  fi
 
   # Cannot rebase main
   if [[ "$worktree_name" == "main" ]]; then
-    error "Cannot rebase the 'main' worktree (tracking branch: $main_branch)"
+    error "Cannot rebase the 'main' worktree (tracking branch: $base_branch)"
   fi
 
   # Validate worktree exists
@@ -521,15 +532,21 @@ cmd_rebase() {
   cd "$main_src" || error "Cannot access main worktree"
   git fetch origin --quiet 2>/dev/null || warn "Failed to fetch from remote, continuing anyway..."
 
+  # Verify base branch exists
+  if ! git show-ref --verify --quiet "refs/heads/$base_branch" && \
+     ! git show-ref --verify --quiet "refs/remotes/origin/$base_branch"; then
+    error "Base branch '$base_branch' does not exist locally or on remote"
+  fi
+
   # Rebase the worktree
   cd "$worktree_path/src" || error "Cannot access worktree src directory"
 
-  echo "Rebasing '$worktree_name' on 'origin/$main_branch'..."
-  if git rebase "origin/$main_branch"; then
+  echo "Rebasing '$worktree_name' on 'origin/$base_branch'..."
+  if git rebase "origin/$base_branch"; then
     # Run rebase hook
     run_hook "$project_name" "rebase"
 
-    success "Worktree '$worktree_name' successfully rebased on 'origin/$main_branch'!"
+    success "Worktree '$worktree_name' successfully rebased on 'origin/$base_branch'!"
   else
     warn "Rebase encountered conflicts. Resolve them manually, then run:"
     warn "  git rebase --continue"
@@ -680,16 +697,16 @@ Worktree Management Tool
 Usage: wt <command> [arguments]
 
 Commands:
-  init <project-name> <url>    Initialize a new project
-  delete                       Delete the current project
-  projects                     List all registered projects
-  list                         List worktrees in current project
-  create <worktree-name>       Create a new worktree
-  remove <worktree-name>       Remove a worktree
-  setup <worktree-name>        Run setup hooks for a worktree
-  rebase <worktree-name>       Rebase a worktree on origin/main
-  sweep                        Remove stale worktrees (merged or inactive)
-  help                         Show this help message
+  init <project-name> <url>         Initialize a new project
+  delete                            Delete the current project
+  projects                          List all registered projects
+  list                              List worktrees in current project
+  create <worktree-name> [base]     Create a new worktree (optionally from base branch)
+  remove <worktree-name>            Remove a worktree
+  setup <worktree-name>             Run setup hooks for a worktree
+  rebase <worktree-name> [base]     Rebase a worktree (optionally on base branch)
+  sweep                             Remove stale worktrees (merged or inactive)
+  help                              Show this help message
 
 For more information, see the README.
 EOF

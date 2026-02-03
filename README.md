@@ -121,6 +121,12 @@ cd myapp
 wt create feature-branch
 ```
 
+To create a worktree based on a different branch instead of main:
+
+```bash
+wt create feature-branch develop
+```
+
 This will:
 - Fetch latest refs from remote origin
 - Create a new directory: `myapp/feature-branch/`
@@ -131,7 +137,9 @@ This will:
 **Branch selection priority:**
 1. If `feature-branch` exists locally, it will be checked out
 2. If `feature-branch` exists on remote origin, it will be checked out from origin
-3. If the branch doesn't exist anywhere, it will be created from the main branch (`main` or `master`)
+3. If the branch doesn't exist anywhere, it will be created from the specified base branch (defaults to `main` or `master` if not specified)
+
+**Note**: The base branch must exist locally or on remote, otherwise an error will be shown.
 
 ### List Worktrees
 
@@ -162,12 +170,21 @@ Rebase a worktree on top of the latest `origin/main`:
 wt rebase feature-branch
 ```
 
+To rebase on a different branch instead of main:
+
+```bash
+wt rebase feature-branch develop
+```
+
 This will:
 - Fetch the latest changes from `origin` (without updating the main worktree)
-- Rebase the specified worktree on top of `origin/main`
+- Rebase the specified worktree on top of the specified base branch (defaults to `origin/main`)
+- Run the `rebase_hook` if available (only on successful rebase)
 - Leave the worktree in conflict state if conflicts occur (for manual resolution)
 
-**Note**: You cannot rebase the `main` worktree.
+**Notes**:
+- You cannot rebase the `main` worktree.
+- The base branch must exist locally or on remote, otherwise an error will be shown.
 
 If the rebase encounters conflicts, you'll need to resolve them manually:
 ```bash
@@ -320,10 +337,10 @@ See `projects/example-project.sh` for more hook examples.
 | `wt delete` | Delete the current project | None |
 | `wt projects` | List all registered projects | None |
 | `wt list` | List worktrees in current project | None |
-| `wt create` | Create a new worktree | `<worktree-name>` |
+| `wt create` | Create a new worktree | `<worktree-name> [base-branch]` |
 | `wt remove` | Remove a worktree | `<worktree-name>` |
 | `wt setup` | Run setup hooks for a worktree | `<worktree-name>` |
-| `wt rebase` | Rebase a worktree on origin/main | `<worktree-name>` |
+| `wt rebase` | Rebase a worktree | `<worktree-name> [base-branch]` |
 | `wt sweep` | Remove stale worktrees | None |
 | `wt help` | Show help message | None |
 
@@ -395,6 +412,22 @@ wt create feature-1
 
 cd ../backend
 wt create feature-1
+```
+
+### Working with Different Base Branches
+
+```bash
+# Create a feature branch from the develop branch
+wt create new-feature develop
+
+# Create a hotfix from a release branch
+wt create hotfix/critical-bug release-1.0
+
+# Rebase feature on develop instead of main
+wt rebase new-feature develop
+
+# Rebase on a specific release branch
+wt rebase hotfix/critical-bug release-1.0
 ```
 
 ## Troubleshooting
