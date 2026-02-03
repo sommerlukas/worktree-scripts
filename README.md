@@ -257,6 +257,28 @@ Sweep complete: 1 removed, 1 skipped
 
 **Note**: This command only operates on worktrees in the current project.
 
+### Update Worktree Scripts
+
+Update the worktree scripts installation to the latest version:
+
+```bash
+wt update
+```
+
+This command will:
+- Check for any local modifications or uncommitted changes (aborts if found)
+- Check for unpushed commits (aborts if found)
+- Fetch the latest changes from the remote repository
+- Pull and update the scripts if updates are available
+- Report if already up-to-date
+
+**Safety checks:**
+- The command will abort with an error if there are any local modifications
+- The command will abort with an error if there are local commits not pushed to remote
+- This ensures you don't accidentally lose any local customizations
+
+The updated scripts will be available immediately for your next `wt` command.
+
 ### Delete a Project
 
 Delete the entire project (requires confirmation):
@@ -342,6 +364,7 @@ See `projects/example-project.sh` for more hook examples.
 | `wt setup` | Run setup hooks for a worktree | `<worktree-name>` |
 | `wt rebase` | Rebase a worktree | `<worktree-name> [base-branch]` |
 | `wt sweep` | Remove stale worktrees | None |
+| `wt update` | Update the worktree scripts installation | None |
 | `wt help` | Show help message | None |
 
 ## Configuration

@@ -689,6 +689,68 @@ cmd_sweep() {
   success "Sweep complete: $removed_count removed, $skipped_count skipped"
 }
 
+# Update the worktree scripts installation
+cmd_update() {
+  if [[ $# -ne 0 ]]; then
+    error "Usage: wt update" 2
+  fi
+
+  # Check if WORKTREE_SCRIPTS_DIR exists
+  if [[ ! -d "$WORKTREE_SCRIPTS_DIR" ]]; then
+    error "Installation directory not found at $WORKTREE_SCRIPTS_DIR"
+  fi
+
+  echo "Updating worktree scripts from $WORKTREE_SCRIPTS_DIR..."
+
+  # Change to installation directory
+  cd "$WORKTREE_SCRIPTS_DIR" || error "Cannot access installation directory"
+
+  # Check if it's a git repository
+  if [[ ! -d ".git" ]]; then
+    error "Installation directory is not a git repository"
+  fi
+
+  # Check for local modifications
+  if [[ -n "$(git status --porcelain)" ]]; then
+    error "Local modifications detected. Please commit or stash your changes before updating."
+  fi
+
+  # Check for unpushed commits
+  if git rev-parse --abbrev-ref @{u} >/dev/null 2>&1; then
+    local unpushed
+    unpushed=$(git rev-list @{u}..HEAD 2>/dev/null | wc -l)
+    if [[ $unpushed -gt 0 ]]; then
+      error "Local commits not pushed to remote. Please push or reset before updating."
+    fi
+  fi
+
+  # Fetch from remote
+  echo "Fetching from remote..."
+  if ! git fetch origin --quiet; then
+    error "Failed to fetch from remote"
+  fi
+
+  # Check if behind remote
+  local behind
+  if git rev-parse --abbrev-ref @{u} >/dev/null 2>&1; then
+    behind=$(git rev-list HEAD..@{u} 2>/dev/null | wc -l)
+  else
+    error "No upstream tracking branch configured"
+  fi
+
+  if [[ $behind -eq 0 ]]; then
+    success "Worktree scripts are already up-to-date!"
+  else
+    echo "Pulling $behind new commit(s)..."
+    if git pull --quiet; then
+      success "Worktree scripts updated successfully!"
+      echo "The updated scripts are now available."
+    else
+      error "Failed to pull updates"
+    fi
+  fi
+}
+
 # Show usage information
 cmd_help() {
   cat << EOF
@@ -706,6 +768,7 @@ Commands:
   setup <worktree-name>             Run setup hooks for a worktree
   rebase <worktree-name> [base]     Rebase a worktree (optionally on base branch)
   sweep                             Remove stale worktrees (merged or inactive)
+  update                            Update the worktree scripts installation
   help                              Show this help message
 
 For more information, see the README.
@@ -758,6 +821,9 @@ main() {
       ;;
     sweep)
       cmd_sweep "$@"
+      ;;
+    update)
+      cmd_update "$@"
       ;;
     help|--help|-h)
       cmd_help
