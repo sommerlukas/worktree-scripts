@@ -481,6 +481,19 @@ cmd_create() {
   echo "Worktree location: $worktree_path"
 }
 
+# Create, set up, and open a worktree in tmux
+cmd_start() {
+  if [[ $# -ne 1 ]]; then
+    error "Usage: wt start <worktree-name>" 2
+  fi
+
+  local worktree_name="$1"
+
+  cmd_create "$worktree_name"
+  cmd_setup "$worktree_name"
+  cmd_tmux "$worktree_name"
+}
+
 # Start or attach to a tmux session for a worktree
 cmd_tmux() {
   if [[ $# -ne 1 ]]; then
@@ -957,13 +970,14 @@ Commands:
   projects                          List all registered projects
   list                              List worktrees in current project
   create <worktree-name> [base]     Create a new worktree (optionally from base branch)
+  start <worktree-name>             Create, set up, and open a worktree in tmux
   tmux <worktree-name>              Start or attach to a tmux session for a worktree
   remove <worktree-name>            Remove a worktree
-  setup <worktree-name>             Run setup hooks for a worktree
+  setup <worktree-name> [options]   Run setup hooks for a worktree
   rebase <worktree-name> [base]     Rebase a worktree (optionally on base branch)
   sweep                             Remove stale worktrees (merged or inactive)
   update                            Update the worktree scripts installation
-  help                              Show this help message
+  help [project-name]               Show this help message or project-specific help
 
 For more information, see the README.
 EOF
@@ -1003,6 +1017,9 @@ main() {
       ;;
     create)
       cmd_create "$@"
+      ;;
+    start)
+      cmd_start "$@"
       ;;
     tmux)
       cmd_tmux "$@"

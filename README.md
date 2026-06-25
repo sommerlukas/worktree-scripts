@@ -142,6 +142,23 @@ This will:
 
 **Note**: The base branch must exist locally or on remote, otherwise an error will be shown.
 
+### Start a Worktree
+
+Create a worktree, run its setup hook, and open it in tmux:
+
+```bash
+wt start feature-branch
+```
+
+This is equivalent to running the following commands back-to-back with their
+default behavior:
+
+```bash
+wt create feature-branch
+wt setup feature-branch
+wt tmux feature-branch
+```
+
 ### List Worktrees
 
 Show all worktrees in the current project:
@@ -418,13 +435,14 @@ See `projects/example-project.sh` for more hook examples.
 | `wt projects` | List all registered projects | None |
 | `wt list` | List worktrees in current project | None |
 | `wt create` | Create a new worktree | `<worktree-name> [base-branch]` |
+| `wt start` | Create, set up, and open a worktree in tmux | `<worktree-name>` |
 | `wt tmux` | Start or attach to a tmux session for a worktree | `<worktree-name>` |
 | `wt remove` | Remove a worktree | `<worktree-name>` |
-| `wt setup` | Run setup hooks for a worktree | `<worktree-name>` |
+| `wt setup` | Run setup hooks for a worktree | `<worktree-name> [project-options...]` |
 | `wt rebase` | Rebase a worktree | `<worktree-name> [base-branch]` |
 | `wt sweep` | Remove stale worktrees | None |
 | `wt update` | Update the worktree scripts installation | None |
-| `wt help` | Show help message | None |
+| `wt help` | Show help message or project-specific help | `[project-name]` |
 
 ## Configuration
 
