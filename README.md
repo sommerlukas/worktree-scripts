@@ -10,6 +10,7 @@ This tool provides a simple command-line interface (`wt`) for managing git workt
 
 - **Project Management**: Initialize, track, and delete projects with ease
 - **Worktree Management**: Create, list, remove, and setup worktrees within projects
+- **Tmux Integration**: Start project-specific tmux sessions for worktrees
 - **Standardized Structure**: Consistent directory layout with `src`, `build`, and `local` directories
 - **Hook System**: Run project-specific scripts at key lifecycle events
 - **Multi-Project Support**: Track and work with multiple projects simultaneously
@@ -149,6 +150,33 @@ Show all worktrees in the current project:
 wt list
 ```
 
+### Open a Worktree in Tmux
+
+Start or attach to a tmux session for a worktree:
+
+```bash
+wt tmux feature-branch
+```
+
+This will:
+- Create a tmux session named exactly `feature-branch` if it does not already exist
+- Use `feature-branch/` as the base folder for the session
+- Open project-defined initial windows, or a default `src` window in `feature-branch/src/`
+- Attach to the session from a normal shell, or switch the current client when already inside tmux
+
+Projects can define the initial windows with a `tmux_windows` function in their project script. The function prints one `window-name:relative-directory` pair per line:
+
+```bash
+tmux_windows() {
+  echo "root:."
+  echo "src:src"
+  echo "build:build"
+  echo "local:local"
+}
+```
+
+Window directories must exist, must be relative to the worktree folder, and cannot escape the worktree. Use `.` for the worktree base directory.
+
 ### Setup a Worktree
 
 Run setup hooks for a specific worktree:
@@ -204,6 +232,7 @@ wt remove feature-branch
 ```
 
 This will:
+- Kill a tmux session named after the worktree if one exists
 - Run the `remove_hook` if available
 - Remove the git worktree
 - Delete the worktree directory
@@ -229,6 +258,7 @@ The sweep command will:
 - Scan all worktrees in the current project
 - Display all stale worktrees with reasons
 - Ask for individual confirmation before removing each worktree
+- Kill a tmux session named after each removed worktree if one exists
 - Run the `remove_hook` for each removed worktree
 - Show a summary of actions taken
 
@@ -299,8 +329,9 @@ Hooks allow you to run project-specific commands at key points in the worktree l
 ### Creating Hook Scripts
 
 1. Create a script in `~/.worktree-scripts/projects/` named `<project-name>.sh`
-2. Define hook functions: `init_hook`, `create_hook`, `remove_hook`, `setup_hook`
-3. Make the script executable (optional)
+2. Define hook functions: `init_hook`, `create_hook`, `remove_hook`, `setup_hook`, `rebase_hook`
+3. Optionally define `tmux_windows` to configure `wt tmux`
+4. Make the script executable (optional)
 
 Example hook script (`~/.worktree-scripts/projects/myapp.sh`):
 
@@ -337,6 +368,14 @@ rebase_hook() {
   echo "Updating dependencies after rebase..."
   npm install
 }
+
+# Called by 'wt tmux'
+tmux_windows() {
+  echo "root:."
+  echo "src:src"
+  echo "build:build"
+  echo "local:local"
+}
 ```
 
 ### Available Hooks
@@ -349,6 +388,10 @@ rebase_hook() {
 | `setup_hook` | During `wt setup` | `<project>/<worktree>/src` |
 | `rebase_hook` | After `wt rebase` (only on success) | `<project>/<worktree>/src` |
 
+### Tmux Window Configuration
+
+`tmux_windows` is an optional project function used by `wt tmux`. It prints `window-name:relative-directory` pairs, one per line. Relative directories are resolved from `<project>/<worktree>/`, so `src:src` opens a window named `src` in the worktree's `src` directory, and `root:.` opens a window named `root` in the worktree base directory. If the function is not defined or prints no entries, `wt tmux` defaults to `src:src`.
+
 See `projects/example-project.sh` for more hook examples.
 
 ## Commands Reference
@@ -360,6 +403,7 @@ See `projects/example-project.sh` for more hook examples.
 | `wt projects` | List all registered projects | None |
 | `wt list` | List worktrees in current project | None |
 | `wt create` | Create a new worktree | `<worktree-name> [base-branch]` |
+| `wt tmux` | Start or attach to a tmux session for a worktree | `<worktree-name>` |
 | `wt remove` | Remove a worktree | `<worktree-name>` |
 | `wt setup` | Run setup hooks for a worktree | `<worktree-name>` |
 | `wt rebase` | Rebase a worktree | `<worktree-name> [base-branch]` |
@@ -487,4 +531,3 @@ git worktree remove --force path/to/worktree
 # Prune stale worktrees
 git worktree prune
 ```
-

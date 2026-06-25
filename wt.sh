@@ -143,6 +143,105 @@ run_hook() {
   fi
 }
 
+tmux_session_exists() {
+  local session_name="$1"
+
+  command -v tmux > /dev/null 2>&1 || return 1
+  tmux has-session -t "=${session_name}" 2>/dev/null
+}
+
+attach_or_switch_tmux_session() {
+  local session_name="$1"
+
+  if [[ -n "${TMUX:-}" ]]; then
+    tmux switch-client -t "=${session_name}" || error "Failed to switch to tmux session '$session_name'"
+  else
+    exec tmux attach-session -t "=${session_name}"
+  fi
+}
+
+kill_tmux_session_for_worktree() {
+  local worktree_name="$1"
+
+  if tmux_session_exists "$worktree_name"; then
+    echo "Killing tmux session '$worktree_name'..."
+    tmux kill-session -t "=${worktree_name}" || warn "Failed to kill tmux session '$worktree_name'"
+  fi
+}
+
+validate_tmux_window_dir() {
+  local worktree_path="$1"
+  local relative_dir="$2"
+
+  if [[ -z "$relative_dir" ]]; then
+    error "tmux window directory cannot be empty"
+  fi
+
+  if [[ "$relative_dir" = /* ]]; then
+    error "tmux window directory '$relative_dir' must be relative to the worktree"
+  fi
+
+  local worktree_root
+  local resolved_dir
+  worktree_root=$(realpath "$worktree_path") || error "Cannot resolve worktree path: $worktree_path"
+  resolved_dir=$(realpath "$worktree_path/$relative_dir" 2>/dev/null) || error "tmux window directory '$relative_dir' does not exist under $worktree_path"
+
+  if [[ "$resolved_dir" != "$worktree_root" && "$resolved_dir" != "$worktree_root"/* ]]; then
+    error "tmux window directory '$relative_dir' escapes the worktree"
+  fi
+
+  echo "$resolved_dir"
+}
+
+get_tmux_windows() {
+  local project_name="$1"
+  local worktree_path="$2"
+  local hook_script="$WORKTREE_SCRIPTS_DIR/projects/${project_name}.sh"
+  local -a windows
+
+  if [[ -f "$hook_script" ]]; then
+    source "$hook_script"
+
+    if typeset -f tmux_windows > /dev/null; then
+      local line
+      local window_name
+      local relative_dir
+      local resolved_dir
+      while IFS= read -r line; do
+        if [[ -z "$line" ]]; then
+          continue
+        fi
+
+        if [[ "$line" != *:* ]]; then
+          error "Invalid tmux window entry '$line'. Expected 'name:relative-directory'."
+        fi
+
+        window_name="${line%%:*}"
+        relative_dir="${line#*:}"
+
+        if [[ -z "$window_name" ]]; then
+          error "tmux window name cannot be empty"
+        fi
+
+        if [[ "$window_name" == *:* ]]; then
+          error "tmux window name '$window_name' cannot contain ':'"
+        fi
+
+        resolved_dir=$(validate_tmux_window_dir "$worktree_path" "$relative_dir") || return 1
+        windows+=("${window_name}"$'\t'"${resolved_dir}")
+      done < <(cd "$worktree_path" && tmux_windows)
+    fi
+  fi
+
+  if [[ ${#windows[@]} -eq 0 ]]; then
+    local default_dir
+    default_dir=$(validate_tmux_window_dir "$worktree_path" "src") || return 1
+    windows+=("src"$'\t'"${default_dir}")
+  fi
+
+  printf '%s\n' "${windows[@]}"
+}
+
 # Check if a worktree is valid
 is_valid_worktree() {
   local project_root="$1"
@@ -381,6 +480,73 @@ cmd_create() {
   echo "Worktree location: $worktree_path"
 }
 
+# Start or attach to a tmux session for a worktree
+cmd_tmux() {
+  if [[ $# -ne 1 ]]; then
+    error "Usage: wt tmux <worktree-name>" 2
+  fi
+
+  if ! command -v tmux > /dev/null 2>&1; then
+    error "tmux is required but not found in PATH"
+  fi
+
+  local worktree_name="$1"
+
+  # Find project root
+  local result
+  result=$(find_project_root)
+  local project_path
+  local project_name
+  project_path=$(echo "$result" | sed -n '1p')
+  project_name=$(echo "$result" | sed -n '2p')
+
+  # Validate worktree exists
+  if ! is_valid_worktree "$project_path" "$worktree_name"; then
+    error "Worktree '$worktree_name' does not exist or is not valid"
+  fi
+
+  local worktree_path="$project_path/$worktree_name"
+  local session_name="$worktree_name"
+
+  if tmux_session_exists "$session_name"; then
+    echo "Attaching to existing tmux session '$session_name'..."
+    attach_or_switch_tmux_session "$session_name"
+    return 0
+  fi
+
+  local -a window_names
+  local -a window_dirs
+  local window_name
+  local window_dir
+  local tmux_window_output
+
+  tmux_window_output=$(get_tmux_windows "$project_name" "$worktree_path") || error "Failed to get tmux window configuration for worktree '$worktree_name'"
+
+  while IFS=$'\t' read -r window_name window_dir; do
+    window_names+=("$window_name")
+    window_dirs+=("$window_dir")
+  done <<< "$tmux_window_output"
+
+  if [[ ${#window_names[@]} -eq 0 ]]; then
+    error "No tmux windows configured for worktree '$worktree_name'"
+  fi
+
+  echo "Creating tmux session '$session_name'..."
+
+  local first_pane
+  local first_window_dir
+  first_window_dir=$(printf "%q" "${window_dirs[1]}")
+  first_pane=$(tmux new-session -d -P -F '#{pane_id}' -s "$session_name" -c "$worktree_path" -n "${window_names[1]}") || error "Failed to create tmux session '$session_name'"
+  tmux send-keys -t "$first_pane" "cd $first_window_dir" C-m || error "Failed to initialize first tmux window"
+
+  local i
+  for (( i = 2; i <= ${#window_names[@]}; i++ )); do
+    tmux new-window -d -t "=${session_name}" -c "${window_dirs[$i]}" -n "${window_names[$i]}" || error "Failed to create tmux window '${window_names[$i]}'"
+  done
+
+  attach_or_switch_tmux_session "$session_name"
+}
+
 # Internal function to remove a worktree (no confirmation)
 # Args: project_path, project_name, worktree_name
 # Returns: 0 on success, 1 on failure
@@ -389,6 +555,9 @@ remove_worktree_impl() {
   local project_name="$2"
   local worktree_name="$3"
   local worktree_path="$project_path/$worktree_name"
+
+  # Stop any tmux session before hooks or filesystem removal.
+  kill_tmux_session_for_worktree "$worktree_name"
 
   # Run remove hook
   if [[ -d "$worktree_path/src" ]]; then
@@ -764,6 +933,7 @@ Commands:
   projects                          List all registered projects
   list                              List worktrees in current project
   create <worktree-name> [base]     Create a new worktree (optionally from base branch)
+  tmux <worktree-name>              Start or attach to a tmux session for a worktree
   remove <worktree-name>            Remove a worktree
   setup <worktree-name>             Run setup hooks for a worktree
   rebase <worktree-name> [base]     Rebase a worktree (optionally on base branch)
@@ -809,6 +979,9 @@ main() {
       ;;
     create)
       cmd_create "$@"
+      ;;
+    tmux)
+      cmd_tmux "$@"
       ;;
     remove)
       cmd_remove "$@"

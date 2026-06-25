@@ -12,6 +12,9 @@
 # - remove_hook: Called before 'wt remove' in the worktree's src directory
 # - setup_hook: Called by 'wt setup' in the worktree's src directory
 # - rebase_hook: Called after 'wt rebase' (only on success) in the worktree's src directory
+#
+# Projects can also define tmux_windows to configure 'wt tmux':
+# - tmux_windows: Prints 'window-name:relative-directory' lines
 
 # Called after initializing a new project
 # Working directory: <project-root>/main/src
@@ -165,3 +168,12 @@ rebase_hook() {
   #   make build
   # fi
 }
+
+# Called by 'wt tmux' to configure initial tmux windows.
+# Directories are relative to <project-root>/<worktree-name>.
+# If omitted, 'wt tmux' opens one window: src:src.
+# tmux_windows() {
+#   echo "src:src"
+#   echo "build:build"
+#   echo "local:local"
+# }
