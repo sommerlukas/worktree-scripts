@@ -185,6 +185,14 @@ Run setup hooks for a specific worktree:
 wt setup feature-branch
 ```
 
+Project-specific setup options can be passed after the worktree name:
+
+```bash
+wt setup feature-branch --use-gcc
+```
+
+Use `wt help <project-name>` to see options supported by a project script.
+
 This is useful for:
 - Reinstalling dependencies
 - Rebuilding the project
@@ -331,7 +339,8 @@ Hooks allow you to run project-specific commands at key points in the worktree l
 1. Create a script in `~/.worktree-scripts/projects/` named `<project-name>.sh`
 2. Define hook functions: `init_hook`, `create_hook`, `remove_hook`, `setup_hook`, `rebase_hook`
 3. Optionally define `tmux_windows` to configure `wt tmux`
-4. Make the script executable (optional)
+4. Optionally define `help_hook` to document project-specific commands and options
+5. Make the script executable (optional)
 
 Example hook script (`~/.worktree-scripts/projects/myapp.sh`):
 
@@ -369,6 +378,11 @@ rebase_hook() {
   npm install
 }
 
+# Called by 'wt help <project-name>'
+help_hook() {
+  echo "Project-specific help goes here."
+}
+
 # Called by 'wt tmux'
 tmux_windows() {
   echo "root:."
@@ -387,6 +401,7 @@ tmux_windows() {
 | `remove_hook` | Before `wt remove` | `<project>/<worktree>/src` |
 | `setup_hook` | During `wt setup` | `<project>/<worktree>/src` |
 | `rebase_hook` | After `wt rebase` (only on success) | `<project>/<worktree>/src` |
+| `help_hook` | During `wt help <project-name>` | Current directory |
 
 ### Tmux Window Configuration
 

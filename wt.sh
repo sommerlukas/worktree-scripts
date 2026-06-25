@@ -128,6 +128,7 @@ get_main_branch() {
 run_hook() {
   local project_name="$1"
   local hook_name="$2"
+  shift 2
   local hook_script="$WORKTREE_SCRIPTS_DIR/projects/${project_name}.sh"
 
   if [[ -f "$hook_script" ]]; then
@@ -138,7 +139,7 @@ run_hook() {
     local hook_function="${hook_name}_hook"
     if typeset -f "$hook_function" > /dev/null; then
       echo "Running ${hook_name} hook for ${project_name}..."
-      "$hook_function"
+      "$hook_function" "$@"
     fi
   fi
 }
@@ -632,11 +633,12 @@ cmd_remove() {
 
 # Setup a worktree
 cmd_setup() {
-  if [[ $# -ne 1 ]]; then
-    error "Usage: wt setup <worktree-name>" 2
+  if [[ $# -lt 1 ]]; then
+    error "Usage: wt setup <worktree-name> [project-options...]" 2
   fi
 
   local worktree_name="$1"
+  shift
 
   # Find project root
   local result
@@ -655,7 +657,7 @@ cmd_setup() {
 
   # Run setup hook
   cd "$worktree_path/src" || error "Cannot access worktree src directory"
-  run_hook "$project_name" "setup"
+  run_hook "$project_name" "setup" "$@" || error "Setup hook failed for worktree '$worktree_name'"
 
   success "Setup complete for worktree '$worktree_name'!"
 }
@@ -922,6 +924,28 @@ cmd_update() {
 
 # Show usage information
 cmd_help() {
+  if [[ $# -gt 1 ]]; then
+    error "Usage: wt help [project-name]" 2
+  fi
+
+  if [[ $# -eq 1 ]]; then
+    local project_name="$1"
+    local hook_script="$WORKTREE_SCRIPTS_DIR/projects/${project_name}.sh"
+
+    if [[ ! -f "$hook_script" ]]; then
+      error "No project help found for '$project_name'" 2
+    fi
+
+    source "$hook_script"
+
+    if typeset -f help_hook > /dev/null; then
+      help_hook
+    else
+      echo "No project-specific help is available for '$project_name'."
+    fi
+    return 0
+  fi
+
   cat << EOF
 Worktree Management Tool
 
@@ -999,7 +1023,7 @@ main() {
       cmd_update "$@"
       ;;
     help|--help|-h)
-      cmd_help
+      cmd_help "$@"
       ;;
     *)
       error "Unknown command: $cmd\n\nRun 'wt help' for usage information." 2
