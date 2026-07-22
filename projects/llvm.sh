@@ -117,6 +117,7 @@ setup_hook() {
     -DLLVM_CCACHE_BUILD=ON \
     "${linker_args[@]}" \
     -DLLVM_BUILD_TESTS=ON \
+    -DLLVM_LIT_ARGS="-j32 -sv" \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
     -DLLVM_USE_SPLIT_DWARF=ON \
     -DLLVM_ENABLE_RUNTIMES="compiler-rt" \
