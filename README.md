@@ -136,6 +136,13 @@ To create a worktree based on a different branch instead of main:
 wt create feature-branch develop
 ```
 
+Branch names containing `/` use `_` in the worktree directory name. For
+example, `wt create feature/login` creates the branch `feature/login` in
+`myapp/feature_login/`. Commands that operate on an existing worktree, such as
+`wt setup`, `wt tmux`, `wt rebase`, and `wt remove`, accept either
+`feature/login` or `feature_login`. Use the original branch name with `wt create`
+and `wt start`, because that argument determines the Git branch name.
+
 This will:
 - Fetch latest refs from remote origin
 - Create a new directory: `myapp/feature-branch/`

@@ -163,11 +163,46 @@ attach_or_switch_tmux_session() {
 
 kill_tmux_session_for_worktree() {
   local worktree_name="$1"
+  local session_name
+  session_name=$(get_worktree_directory_name "$worktree_name")
 
-  if tmux_session_exists "$worktree_name"; then
-    echo "Killing tmux session '$worktree_name'..."
-    tmux kill-session -t "=${worktree_name}" || warn "Failed to kill tmux session '$worktree_name'"
+  if tmux_session_exists "$session_name"; then
+    echo "Killing tmux session '$session_name'..."
+    tmux kill-session -t "=${session_name}" || warn "Failed to kill tmux session '$session_name'"
   fi
+}
+
+# Convert a branch name into the directory name used for its worktree.
+get_worktree_directory_name() {
+  local worktree_name="$1"
+  echo "${worktree_name//\//_}"
+}
+
+get_worktree_path() {
+  local project_root="$1"
+  local worktree_name="$2"
+  local directory_name
+  directory_name=$(get_worktree_directory_name "$worktree_name")
+  echo "$project_root/$directory_name"
+}
+
+# Check that a requested name identifies the branch checked out in a worktree.
+# A normalized directory name is accepted as an alias, but a branch name that
+# contains '/' must match exactly so it cannot target an underscore-named branch.
+worktree_name_matches_branch() {
+  local requested_name="$1"
+  local branch_name="$2"
+
+  if [[ "$requested_name" == "$branch_name" ]]; then
+    return 0
+  fi
+
+  if [[ "$requested_name" != */* ]] && \
+     [[ "$requested_name" == "$(get_worktree_directory_name "$branch_name")" ]]; then
+    return 0
+  fi
+
+  return 1
 }
 
 validate_tmux_window_dir() {
@@ -247,7 +282,8 @@ get_tmux_windows() {
 is_valid_worktree() {
   local project_root="$1"
   local worktree_name="$2"
-  local worktree_path="$project_root/$worktree_name"
+  local worktree_path
+  worktree_path=$(get_worktree_path "$project_root" "$worktree_name")
 
   # Check if directory exists
   if [[ ! -d "$worktree_path/src" ]]; then
@@ -261,11 +297,13 @@ is_valid_worktree() {
   fi
 
   cd "$main_src" || return 1
-  if git worktree list | grep -q "$worktree_path/src"; then
-    return 0
-  else
+  if ! git worktree list --porcelain | grep -Fqx "worktree $worktree_path/src"; then
     return 1
   fi
+
+  local branch_name
+  branch_name=$(git -C "$worktree_path/src" symbolic-ref --quiet --short HEAD) || return 1
+  worktree_name_matches_branch "$worktree_name" "$branch_name"
 }
 
 # ============================================================================
@@ -412,11 +450,14 @@ cmd_create() {
   project_path=$(echo "$result" | sed -n '1p')
   project_name=$(echo "$result" | sed -n '2p')
 
-  local worktree_path="$project_path/$worktree_name"
+  local directory_name
+  local worktree_path
+  directory_name=$(get_worktree_directory_name "$worktree_name")
+  worktree_path=$(get_worktree_path "$project_path" "$worktree_name")
 
   # Check if worktree already exists
-  if [[ -d "$worktree_path" ]]; then
-    error "Worktree directory '$worktree_name' already exists at $worktree_path"
+  if [[ -e "$worktree_path" ]]; then
+    error "Worktree directory '$directory_name' already exists at $worktree_path"
   fi
 
   local main_src="$project_path/main/src"
@@ -521,8 +562,10 @@ cmd_tmux() {
     error "Worktree '$worktree_name' does not exist or is not valid"
   fi
 
-  local worktree_path="$project_path/$worktree_name"
-  local session_name="$worktree_name"
+  local worktree_path
+  local session_name
+  worktree_path=$(get_worktree_path "$project_path" "$worktree_name")
+  session_name=$(get_worktree_directory_name "$worktree_name")
 
   if tmux_session_exists "$session_name"; then
     echo "Attaching to existing tmux session '$session_name'..."
@@ -570,7 +613,8 @@ remove_worktree_impl() {
   local project_path="$1"
   local project_name="$2"
   local worktree_name="$3"
-  local worktree_path="$project_path/$worktree_name"
+  local worktree_path
+  worktree_path=$(get_worktree_path "$project_path" "$worktree_name")
 
   # Stop any tmux session before hooks or filesystem removal.
   kill_tmux_session_for_worktree "$worktree_name"
@@ -627,7 +671,8 @@ cmd_remove() {
     error "Worktree '$worktree_name' does not exist or is not valid"
   fi
 
-  local worktree_path="$project_path/$worktree_name"
+  local worktree_path
+  worktree_path=$(get_worktree_path "$project_path" "$worktree_name")
 
   # Ask for confirmation
   echo "Are you sure you want to remove worktree '$worktree_name'? (y/N)"
@@ -668,7 +713,8 @@ cmd_setup() {
     error "Worktree '$worktree_name' does not exist or is not valid"
   fi
 
-  local worktree_path="$project_path/$worktree_name"
+  local worktree_path
+  worktree_path=$(get_worktree_path "$project_path" "$worktree_name")
 
   # Run setup hook
   cd "$worktree_path/src" || error "Cannot access worktree src directory"
@@ -711,7 +757,8 @@ cmd_rebase() {
     error "Worktree '$worktree_name' does not exist or is not valid"
   fi
 
-  local worktree_path="$project_path/$worktree_name"
+  local worktree_path
+  worktree_path=$(get_worktree_path "$project_path" "$worktree_name")
 
   # Fetch from origin (without updating main worktree)
   echo "Fetching from origin..."
@@ -781,9 +828,9 @@ cmd_sweep() {
     elif [[ "$line" =~ ^branch\ refs/heads/(.+)$ ]]; then
       current_branch="${match[1]}"
 
-      # Extract worktree name from path
-      local worktree_name=$(basename "$(dirname "$current_worktree")")
-      local worktree_path="$project_path/$worktree_name"
+      local worktree_name="$current_branch"
+      local worktree_path
+      worktree_path=$(get_worktree_path "$project_path" "$worktree_name")
 
       # Skip main
       if [[ "$worktree_name" == "main" ]]; then
