@@ -274,34 +274,36 @@ is_valid_worktree() {
 
 # Initialize a new project
 cmd_init() {
-  if [[ $# -ne 2 ]]; then
-    error "Usage: wt init <project-name> <url>" 2
+  if [[ $# -lt 2 || $# -gt 3 ]]; then
+    error "Usage: wt init <project-name> <url> [directory-name]" 2
   fi
 
   local project_name="$1"
   local repo_url="$2"
+  local directory_name="${3:-$project_name}"
+  local initial_dir="$PWD"
+  local project_path="$initial_dir/$directory_name"
 
   # Check if project directory already exists
-  if [[ -d "$project_name" ]]; then
-    error "Project directory '$project_name' already exists in current directory."
+  if [[ -e "$project_path" ]]; then
+    error "Project directory '$directory_name' already exists in current directory."
   fi
 
   # Create directory structure
-  echo "Creating project structure for '$project_name'..."
-  mkdir -p "$project_name/main" || error "Failed to create project directory"
+  echo "Creating project structure for '$directory_name'..."
+  mkdir -p "$project_path/main" || error "Failed to create project directory"
 
-  cd "$project_name/main" || error "Failed to enter project directory"
+  cd "$project_path/main" || error "Failed to enter project directory"
 
   # Clone repository
   echo "Cloning repository from $repo_url..."
   if ! git clone "$repo_url" src; then
-    cd ../..
-    rm -rf "$project_name"
+    cd "$initial_dir" || error "Failed to return to initial directory after clone failure"
+    rm -rf -- "$project_path"
     error "Failed to clone repository"
   fi
 
   # Get absolute path of project root
-  local project_path
   project_path=$(realpath "..")
 
   # Add to projects list
@@ -965,7 +967,8 @@ Worktree Management Tool
 Usage: wt <command> [arguments]
 
 Commands:
-  init <project-name> <url>         Initialize a new project
+  init <project-name> <url> [directory-name]
+                                    Initialize a new project
   delete                            Delete the current project
   projects                          List all registered projects
   list                              List worktrees in current project

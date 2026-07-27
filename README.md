@@ -90,7 +90,7 @@ wt help
 Create a new project by cloning a repository:
 
 ```bash
-wt init <project-name> <git-url>
+wt init <project-name> <git-url> [directory-name]
 ```
 
 Example:
@@ -99,11 +99,19 @@ Example:
 wt init myapp https://github.com/user/myapp.git
 ```
 
+By default, the project name is also used as the directory name. Provide the
+optional third argument to use a different directory while keeping the same
+project configuration:
+
+```bash
+wt init myapp https://github.com/user/myapp.git myapp-local
+```
+
 This will:
-- Create a directory structure: `myapp/main/src/`
+- Create a directory structure using the selected directory name, such as `myapp/main/src/` or `myapp-local/main/src/`
 - Clone the repository into `src`
-- Register the project
-- Run the `init_hook` if available
+- Register the directory with the `myapp` project configuration
+- Run the `myapp` `init_hook` if available
 
 ### List All Projects
 
@@ -430,7 +438,7 @@ See `projects/example-project.sh` for more hook examples.
 
 | Command | Description | Arguments |
 |---------|-------------|-----------|
-| `wt init` | Initialize a new project | `<project-name> <git-url>` |
+| `wt init` | Initialize a new project | `<project-name> <git-url> [directory-name]` |
 | `wt delete` | Delete the current project | None |
 | `wt projects` | List all registered projects | None |
 | `wt list` | List worktrees in current project | None |
